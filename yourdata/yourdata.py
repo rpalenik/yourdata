@@ -270,11 +270,37 @@ def create_dataset(dataset, description="None"):
 
 @hug.get('/upload_dataset')
 @hug.cli()
-def upload_dataset(dataset, description="None", subset='root', sub_description="None"):
-    """upload data to a new dataset - create new dataset if non-existent"""
-    xres = create_dataset(dataset, description)
+def upload_dataset(dataset, path, description="None", subset="root",
+                   sub_description="None", source_type="filesys",
+                   driver="json", key_method="recnum"):
+    """upload data to a new dataset - create new dataset if non-existent
+        parameters:
+
+        dataset (str) : Name of the dataset
+        path (str) : PAth to files or connection string
+        description (str) : Free text description of the dataset
+        subset (str) : name of the dataset subset / version
+        sub_description (str) : Free text description of the subset/version
+        source_type (str) : Type of data source
+        (extendable via plugins system)
+        driver (str) : name of the method for reading data
+        (extendable via plugins system)
+        key_method (str) : Method for generation of dataset records keys
+        (extendable via plugins system)
+    """
+    # xres = create_dataset(dataset, description)
+    from stevedore import driver
+    xres = {"result": "ok"}
     if xres['result'] == 'ok':
-        pass
+        mgr = driver.DriverManager(
+            namespace='plugins.datasource',
+            name=source_type,
+            invoke_on_load=True,
+            # invoke_args=(parsed_args.width,),
+        )
+        xbag = mgr.driver.load('/Users/rp/Documents/workspace/python-development/platform/data/*.*')
+
+        result = {'result': 'ok'}
     else:
         info = "*** Failed to upload : dataset {0}, subset {1}.".format(
             dataset, subset)
@@ -359,6 +385,7 @@ def list_stream_items(chainname: hug.types.text, stream: hug.types.text):
 
 if __name__ == '__main__':
     connect.interface.cli()
+    upload_dataset.interface.cli()
     disconnect.interface.cli()
     catalog.interface.cli()
     subscribe_to_stream.interface.cli()
