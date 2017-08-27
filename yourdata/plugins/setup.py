@@ -26,8 +26,8 @@ setup(
 
     scripts=[],
 
-    # provides=['yourdata.plugins.plugins',
-    #           ],
+    provides=['plugins',
+              ],
 
     packages=find_packages(),
     include_package_data=True,
