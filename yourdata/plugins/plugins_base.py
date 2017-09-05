@@ -28,14 +28,13 @@ class KeyMethodBase(object):
     """
 
     @abc.abstractmethod
-    def generate_key(self, record):
+    def generate_key(self):
         """Generates key for each record written to the database
 
         :param record: single JSON formatted record
         :type : python dict
         :returns: string
         """
-        return ""
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -46,4 +45,25 @@ class DataSourceBase(object):
     @abc.abstractmethod
     def load(self):
         """Load data
+        """
+
+
+@six.add_metaclass(abc.ABCMeta)
+class DataTypeConversionBase(object):
+    """Base class for blockchain write related data_conversion plugins
+    """
+
+    @abc.abstractmethod
+    def convert(self):
+        """Convert data to required format
+        """
+
+@six.add_metaclass(abc.ABCMeta)
+class CompressionBase(object):
+    """Base class for compression methods
+    """
+
+    @abc.abstractmethod
+    def compress(self):
+        """Compress data
         """

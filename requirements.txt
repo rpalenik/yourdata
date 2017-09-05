@@ -3,4 +3,6 @@ stevedore>=1.25.0
 hug>=2.3.0
 python-bitcoinrpc>=1.0
 pika>=0.10.0
-dask[bag]
+dask[complete]
+py2neo
+zstandard

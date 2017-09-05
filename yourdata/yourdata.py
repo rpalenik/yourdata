@@ -3,7 +3,7 @@
 
 
 import hug
-from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
+from bitcoinrpc.authproxy import AuthServiceProxy
 import pika
 import uuid
 import re
@@ -11,6 +11,8 @@ import os
 import binascii
 import json
 import sys
+import dask
+from dask import bag as db
 from os.path import expanduser
 xhome = expanduser("~")
 
@@ -20,6 +22,14 @@ D_HOME = '/home/ubuntu'
 # A_CATALOG ='testcon@172.31.9.219:9253'
 A_CATALOG = 'catalog@172.31.9.219:5757'
 P_TIMEOUT = 10
+
+# Multichain RPC remote parameters
+rpc_user = 'rp'
+rpc_password = 'heslorichard'
+rpc_server = '52.54.155.107'
+rpc_port = '2770'
+
+# connection on server side (example): multichaind dask -server -rpcuser=rp -rpcpassword=heslorichard -rpcallowip=0.0.0.0/0
 # END config parameters
 
 
@@ -67,7 +77,10 @@ class RpcClient(object):
         return self.response
 
 
-rpc = RpcClient()
+# BEGIN Connections
+# rpc = RpcClient()
+
+# END Connections
 
 
 def message_to_json(message):
@@ -89,20 +102,28 @@ def message_to_json(message):
 # works under Linux, Mac OS, Windows
 
 
-def ping_old(host):
-    """
-    Returns True if host responds to a ping request
-    """
-    import subprocess
-    import platform
+def write_to_chain(l, key_driver, dataset, subset):
+    import binascii
+    try:
+        rpc_connection = create_rpc_conn(dataset)
+        key = key_driver.generate_key(l)
+        if type(l) != bytes:
+            l = l.encode()
+        payload = binascii.hexlify(l)
+        rpc_connection.publish(subset, key, payload.decode('utf-8'))
+    except:
+        raise
 
-    # Ping parameters as function of OS
-    ping_str = "-n 1" if platform.system().lower() == "windows" else "-c 1"
-    args = "ping " + " " + ping_str + " " + host
-    need_sh = False if platform.system().lower() == "windows" else True
 
-    # Ping
-    return subprocess.call(args, shell=need_sh) == 0
+def get_driver(namespace, name):
+    from stevedore import driver
+    x = driver.DriverManager(
+        namespace=namespace,
+        name=name,
+        invoke_on_load=True,
+        # invoke_args=(parsed_args.width,),
+    )
+    return x.driver
 
 
 def ping(host, port):
@@ -151,15 +172,25 @@ def request_action(message):
     return result
 
 
-def create_rpc_conn(chain):
-    try:
-        rpc_user, rpc_password, rpc_port = get_credentials(chain)
-        rpc_connection = AuthServiceProxy(
-            "http://%s:%s@127.0.0.1:%s" % (rpc_user, rpc_password, rpc_port))
-        return rpc_connection
-    except:
-        print("***Cannot create local rpc connection")
-        raise
+def create_rpc_conn(chain, remote=True):
+    if remote:
+        try:
+            rpc_connection = AuthServiceProxy(
+                'http://%s:%s@%s:%s' % (rpc_user, rpc_password, rpc_server, rpc_port))
+            # print('***Remote rpc connection created')
+            return rpc_connection
+        except:
+            print('***Cannot create remote rpc connection')
+            raise
+    else:
+        try:
+            rpc_u, rpc_pw, rpc_por = get_credentials(chain)
+            rpc_connection = AuthServiceProxy(
+                "http://%s:%s@127.0.0.1:%s" % (rpc_u, rpc_pw, rpc_por))
+            return rpc_connection
+        except:
+            print("***Cannot create local rpc connection")
+            raise
 
 
 def get_credentials(chainname):
@@ -179,16 +210,12 @@ def get_credentials(chainname):
 @hug.cli()
 def connect():
     """connect to the platform"""
-    # print (D_HOME + '/.multichain/' + catalog_name)
-    # print (os.path.isdir(D_HOME + '/.multichain/' + catalog_name))
     if os.path.isdir(D_HOME + '/.multichain/' + catalog_name):
         # Catalog already exists locally, just connecting
         print("***Connecting to local catalog ...")
         os.system("multichaind " + A_CATALOG + " -daemon")
         try:
-            rpc_user, rpc_password, rpc_port = get_credentials(catalog_name)
-            rpc_connection = AuthServiceProxy(
-                "http://%s:%s@127.0.0.1:%s" % (rpc_user, rpc_password, rpc_port))
+            rpc_connection = create_rpc_conn(catalog_name, remote=False)
             xres = rpc_connection.getinfo()['nodeaddress']
             # print (xres)
             print("***Running " + xres)
@@ -206,9 +233,7 @@ def connect():
         print(host, port)
         if ping(host, port):
             os.system("multichaind " + A_CATALOG + " -daemon")
-            rpc_user, rpc_password, rpc_port = get_credentials(catalog_name)
-            rpc_connection = AuthServiceProxy(
-                "http://%s:%s@127.0.0.1:%s" % (rpc_user, rpc_password, rpc_port))
+            rpc_connection = create_rpc_conn(catalog_name, remote=False)
             xadd = rpc_connection.getaddresses()[0]
             message = {"from": A_CATALOG, "type": "request",
                        "command": "grant_access", "address": xadd}
@@ -243,12 +268,12 @@ def create_dataset(dataset, description="None"):
     if not os.path.isdir(D_HOME + '/.multichain/' + dataset):
         # test if platform messaging is online
         if request_action({"from": A_CATALOG, "type": "ping"}):
-            os.system("multichain-util create " + dataset)
-            os.system("multichaind " + dataset + " -daemon")
-            rpc_connection = create_rpc_conn(dataset)
+            os.system('multichain-util create ' + dataset)
+            os.system('multichaind ' + dataset + ' -daemon')
+            rpc_connection = create_rpc_conn(dataset, remote=False)
             nodeaddress = rpc_connection.getinfo()['nodeaddress']
             if not request_action({"from": A_CATALOG, "type": "new_dataset", "dataset": dataset, "nodeaddress": nodeaddress, "description": description}):
-                info = "*** Error in subscribing dataset {0} to platform metadata.".format(
+                info = '*** Error in subscribing dataset {0} to platform metadata.'.format(
                     dataset)
                 print(info)
                 result = {'result': 'failed', 'info': info}
@@ -258,11 +283,11 @@ def create_dataset(dataset, description="None"):
                 print(info)
                 result = {'result': 'ok', 'info': info}
         else:
-            info = "*** Platform is offline. Try again later"
+            info = '*** Platform is offline. Try again later'
             print(info)
             result = {'result': 'failed', 'info': info}
     else:
-        info = "*** Dataset {0} already exists.".format(dataset)
+        info = '*** Dataset {0} already exists.'.format(dataset)
         print(info)
         result = {'result': 'ok', 'info': info}
     return result
@@ -272,7 +297,8 @@ def create_dataset(dataset, description="None"):
 @hug.cli()
 def upload_dataset(dataset, path, description="None", subset="root",
                    sub_description="None", source_type="filesys",
-                   driver="json", key_method="recnum"):
+                   save_type='plaintext', driver='json',
+                   key_method='nokey', compress='zstd'):
     """upload data to a new dataset - create new dataset if non-existent
         parameters:
 
@@ -281,24 +307,42 @@ def upload_dataset(dataset, path, description="None", subset="root",
         description (str) : Free text description of the dataset
         subset (str) : name of the dataset subset / version
         sub_description (str) : Free text description of the subset/version
-        source_type (str) : Type of data source
+        source_type (str) : Type of data source to be read from
+        (extendable via plugins system)
+        save_type (str) : Type of data to be uploaded as
         (extendable via plugins system)
         driver (str) : name of the method for reading data
+        (extendable via plugins system)
+        compress (str) : name of the method for compressing data
         (extendable via plugins system)
         key_method (str) : Method for generation of dataset records keys
         (extendable via plugins system)
     """
     # xres = create_dataset(dataset, description)
-    from stevedore import driver
     xres = {"result": "ok"}
     if xres['result'] == 'ok':
-        mgr = driver.DriverManager(
-            namespace='plugins.datasource',
-            name=source_type,
-            invoke_on_load=True,
-            # invoke_args=(parsed_args.width,),
-        )
-        xbag = mgr.driver.load('/Users/rp/Documents/workspace/python-development/platform/data/*.*')
+
+        drv_load = get_driver('plugins.datasource', source_type)
+        drv_conv = get_driver('plugins.conversion', save_type)
+        drv_key = get_driver('plugins.key', key_method)
+        drv_compr = get_driver('plugins.compress', compress)
+
+        xbag = drv_load.load(path)
+        xbag = db.map(drv_conv.convert, xbag)
+        xbag = db.map(drv_compr.compress, xbag)
+        xbag = db.map(write_to_chain, xbag, key_driver=drv_key,
+                      dataset=dataset, subset=subset)
+
+        xload = dask.delayed(drv_load.load)(path)
+        xconvert = dask.delayed(drv_conv.convert)(xload.compute())
+        xcompress = dask.delayed(drv_compr.compress)(xconvert)
+        xwrite = dask.delayed(write_to_chain)(xcompress, key_driver=drv_key,
+                      dataset=dataset, subset=subset)
+
+        xwrite.compute()
+        #xbag.visualize()
+        #print(xbag.dask)
+        #xbag.compute()
 
         result = {'result': 'ok'}
     else:

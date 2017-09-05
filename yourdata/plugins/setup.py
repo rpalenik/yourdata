@@ -34,7 +34,19 @@ setup(
 
     entry_points={
         'plugins.datasource': [
-            'filesys = plugins:Filesys',
+            'filesys = plugins:FileSys',
+        ],
+        'plugins.conversion': [
+            'plaintext = plugins:PlainText',
+            'bytes = plugins:Bytes',
+            'json = plugins:Json'
+        ],
+        'plugins.key': [
+            'nokey = plugins:NoKey',
+        ],
+        'plugins.compress': [
+            'zstd = plugins:Zstd',
+            'nocompress = plugins:NoCompress',
         ],
     },
 
