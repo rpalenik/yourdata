@@ -46,6 +46,10 @@ class DataSourceBase(object):
     def load(self):
         """Load data
         """
+    @abc.abstractmethod
+    def write(self):
+        """Save data data
+        """
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -66,4 +70,8 @@ class CompressionBase(object):
     @abc.abstractmethod
     def compress(self):
         """Compress data
+        """
+    @abc.abstractmethod
+    def decompress(self):
+        """Uncompress data
         """

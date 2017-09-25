@@ -35,6 +35,8 @@ setup(
     entry_points={
         'plugins.datasource': [
             'filesys = plugins:FileSys',
+            'url = plugins:Url',
+            'blockchain = plugins:BlockChain',
         ],
         'plugins.conversion': [
             'plaintext = plugins:PlainText',
