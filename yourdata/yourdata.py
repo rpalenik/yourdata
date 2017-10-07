@@ -12,7 +12,9 @@ import binascii
 import json
 import sys
 import dask
-from dask import bag as db
+import treelib
+import core as ycore
+import requests
 from os.path import expanduser
 xhome = expanduser("~")
 
@@ -23,6 +25,8 @@ D_HOME = '/home/ubuntu'
 A_CATALOG = 'catalog@172.31.9.219:5757'
 P_TIMEOUT = 10
 
+catalog_name = re.match('\w+', A_CATALOG).group(0)
+
 # Multichain RPC remote parameters
 rpc_user = 'rp'
 rpc_password = 'heslorichard'
@@ -32,9 +36,13 @@ rpc_port = '2770'
 # connection on server side (example): multichaind dask -server -rpcuser=rp -rpcpassword=heslorichard -rpcallowip=0.0.0.0/0
 # END config parameters
 
+# Neo4j graph
 
-catalog_name = re.match('\w+', A_CATALOG).group(0)
-# print (catalog_name)
+from py2neo import Graph, authenticate
+authenticate('23.20.90.129:7474', 'neo4j', 'heslorichard')
+NEO_GRAPH = Graph('http://23.20.90.129:7474/db/data/')
+
+
 
 
 class RpcClient(object):
@@ -248,6 +256,10 @@ def connect():
             result = {'result': 'failed'}
     return result
 
+@hug.get('/conn')
+@hug.cli()
+def conn():
+
 
 @hug.get('/disconnect')
 @hug.cli()
@@ -293,64 +305,57 @@ def create_dataset(dataset, description="None"):
     return result
 
 
-@hug.get('/upload_dataset')
+@hug.get('/run_recipe')
 @hug.cli()
-def upload_dataset(dataset, path, description="None", subset="root",
-                   sub_description="None", source_type="filesys",
-                   save_type='plaintext', driver='json',
-                   key_method='nokey', compress='zstd'):
-    """upload data to a new dataset - create new dataset if non-existent
-        parameters:
+def run_recipe(recipe_id, runtime):
+    """run recipe based on recipe id in catalog:
 
-        dataset (str) : Name of the dataset
-        path (str) : PAth to files or connection string
-        description (str) : Free text description of the dataset
-        subset (str) : name of the dataset subset / version
-        sub_description (str) : Free text description of the subset/version
-        source_type (str) : Type of data source to be read from
-        (extendable via plugins system)
-        save_type (str) : Type of data to be uploaded as
-        (extendable via plugins system)
-        driver (str) : name of the method for reading data
-        (extendable via plugins system)
-        compress (str) : name of the method for compressing data
-        (extendable via plugins system)
-        key_method (str) : Method for generation of dataset records keys
-        (extendable via plugins system)
+        recipe_id (int) : Recipe ID
+        runtime (dict) : Runtime parameters required by recipe
     """
-    # xres = create_dataset(dataset, description)
-    xres = {"result": "ok"}
-    if xres['result'] == 'ok':
+    runtime = json.loads(runtime)
+    print(runtime)
 
-        drv_load = get_driver('plugins.datasource', source_type)
-        drv_conv = get_driver('plugins.conversion', save_type)
-        drv_key = get_driver('plugins.key', key_method)
-        drv_compr = get_driver('plugins.compress', compress)
-
-        xbag = drv_load.load(path)
-        xbag = db.map(drv_conv.convert, xbag)
-        xbag = db.map(drv_compr.compress, xbag)
-        xbag = db.map(write_to_chain, xbag, key_driver=drv_key,
-                      dataset=dataset, subset=subset)
-
-        xload = dask.delayed(drv_load.load)(path)
-        xconvert = dask.delayed(drv_conv.convert)(xload.compute())
-        xcompress = dask.delayed(drv_compr.compress)(xconvert)
-        xwrite = dask.delayed(write_to_chain)(xcompress, key_driver=drv_key,
-                      dataset=dataset, subset=subset)
-
-        xwrite.compute()
-        #xbag.visualize()
-        #print(xbag.dask)
-        #xbag.compute()
-
-        result = {'result': 'ok'}
+    QUERY = '''
+    match (s:recipe) WHERE id(s)=$recipe_id WITH s
+    match (s)-[:NEXT_STEP|FIRST_STEP*]->(s2:step) with s,s2
+    match (s2)<-[:NEXT_STEP|FIRST_STEP]-(s1) with s1,s2
+    match (s2)-[:METHOD]->(me:method) with s1,s2,me
+    match (me)<-[:HAS_METHOD]-(cl:class) with s1,s2,me,cl
+    match (cl)<-[:HAS_CLASS]-(mo:module) with s1,s2,me,cl,mo
+    optional match (me)-[:HAS_PARAM]->(np:param) WITH s1,s2,me,cl,mo,np
+    optional match (np)-[:HAS_ALLOWED_VALUE]->(val:paramvalue)-[:USES_PARAM]-(s2) WITH s1,s2,me,cl,mo,np,val
+    optional match (np)-[:HAS_DEFAULT_VALUE]->(vald:paramvalue) WITH s1,s2,me,cl,mo,np,val,vald
+    WITH s1,s2,me,cl,mo,collect({param:np.name,value:val.value,default:vald.value}) as params
+    WITH s1,s2,collect({namespace:mo.namespace,class:cl.name,method:me.name,params:params}) as action
+    return {step0:CASE labels(s1)[0]
+     WHEN "recipe" THEN -1
+     ELSE id(s1)
+    END,step1:id(s2),description: s2.description, specs: action[0]}
+    '''
+    tx = NEO_GRAPH.begin()
+    params = {'recipe_id': int(recipe_id)}
+    # print(params)
+    result = tx.run(QUERY, params)
+    tx.commit()
+    res = list(result)
+    # print(res)
+    recipe = [x[0] for x in res]
+    if len(recipe)>0:
+        tree = treelib.Tree()
+        tree= ycore.instantiate_node(tree, recipe, runtime)
+        c = [x.data['fnc'] for x in tree.leaves()]
+        b = [tree.get_node(x).data['fnc'] for x in tree.expand_tree()]
+        print(c)
+        r = dask.compute(c)
+        print(len(r))
+        return r
     else:
-        info = "*** Failed to upload : dataset {0}, subset {1}.".format(
-            dataset, subset)
+        info = '*** Recipe does not exists. Exiting'
         print(info)
-        result = {'result': 'failed', 'info': info}
-    return result
+        result = {'result': 'failed'}
+        return result
+
 
 
 @hug.get('/catalog')
@@ -429,7 +434,7 @@ def list_stream_items(chainname: hug.types.text, stream: hug.types.text):
 
 if __name__ == '__main__':
     connect.interface.cli()
-    upload_dataset.interface.cli()
+    run_recipe.interface.cli()
     disconnect.interface.cli()
     catalog.interface.cli()
     subscribe_to_stream.interface.cli()

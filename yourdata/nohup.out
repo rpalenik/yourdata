@@ -1,0 +1,41 @@
+[I 170917 14:29:44 command:139] Visit me at http://localhost:5555
+[I 170917 14:29:44 command:144] Broker: amqp://guest:**@52.54.155.107:5672//
+[I 170917 14:29:44 command:147] Registered tasks: 
+    ['celery.accumulate',
+     'celery.backend_cleanup',
+     'celery.chain',
+     'celery.chord',
+     'celery.chord_unlock',
+     'celery.chunks',
+     'celery.group',
+     'celery.map',
+     'celery.starmap',
+     'tasks.add']
+[I 170917 14:29:45 mixins:224] Connected to amqp://guest:**@52.54.155.107:5672//
+[W 170917 14:29:50 control:44] 'stats' inspect method failed
+[W 170917 14:29:50 control:44] 'active_queues' inspect method failed
+[W 170917 14:29:50 control:44] 'registered' inspect method failed
+[W 170917 14:29:50 control:44] 'scheduled' inspect method failed
+[W 170917 14:29:50 control:44] 'active' inspect method failed
+[W 170917 14:29:50 control:44] 'reserved' inspect method failed
+[W 170917 14:29:50 control:44] 'revoked' inspect method failed
+[W 170917 14:29:50 control:44] 'conf' inspect method failed
+[W 170917 16:52:16 state:112] Substantial drift from celery@Richard-Air.Home may mean clocks are out of sync.  Current drift is
+    5790 seconds.  [orig: 2017-09-17 16:52:15.945412 recv: 2017-09-17 15:15:45.074186]
+    
+[E 170917 16:52:43 events:123] Failed to capture events: '[Errno 60] Operation timed out', trying again in 1 seconds.
+[I 170917 16:52:45 mixins:224] Connected to amqp://guest:**@52.54.155.107:5672//
+[E 170917 20:24:51 events:123] Failed to capture events: '[Errno 54] Connection reset by peer', trying again in 1 seconds.
+[I 170917 20:24:53 mixins:224] Connected to amqp://guest:**@52.54.155.107:5672//
+[E 170917 21:14:10 events:123] Failed to capture events: '[Errno 32] Broken pipe', trying again in 1 seconds.
+[I 170918 21:20:20 mixins:224] Connected to amqp://guest:**@52.54.155.107:5672//
+[E 170918 21:20:21 events:123] Failed to capture events: '[Errno 32] Broken pipe', trying again in 1 seconds.
+[I 170918 21:20:24 mixins:224] Connected to amqp://guest:**@52.54.155.107:5672//
+[E 170918 23:06:41 events:123] Failed to capture events: '[Errno 32] Broken pipe', trying again in 1 seconds.
+[I 170918 23:07:39 mixins:224] Connected to amqp://guest:**@52.54.155.107:5672//
+[E 170918 23:07:40 events:123] Failed to capture events: '[Errno 32] Broken pipe', trying again in 1 seconds.
+[I 170918 23:07:58 mixins:224] Connected to amqp://guest:**@52.54.155.107:5672//
+[E 170918 23:08:02 events:123] Failed to capture events: '[Errno 32] Broken pipe', trying again in 1 seconds.
+[I 170918 23:08:04 mixins:224] Connected to amqp://guest:**@52.54.155.107:5672//
+[E 170918 23:49:06 events:123] Failed to capture events: '[Errno 32] Broken pipe', trying again in 1 seconds.
+[I 170919 17:04:37 command:47] SIGTERM detected, shutting down

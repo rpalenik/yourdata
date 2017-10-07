@@ -51,43 +51,30 @@ class Url(plugins_base.DataSourceBase):
         result = requests.get(url, headers=headers, params=params)
         return result.json()
 
-    def get_url(self, url, path, headers, data):
-        import requests
-        handler = requests.get(
-            url + '/' + path, headers=headers, data=data, stream=True)
-        return handler
 
-    def read_text(self, url, path, headers, data):
+    def get_url(self, path, url, headers, data):
+        import requests
+        handler = requests.get(url + '/' + path, headers=headers, data=data, stream=True)
+        return [x.decode('utf-8') for x in handler.iter_lines()]
+
+    def turn_to_csv(self, x):
+        import csv
+        return list(csv.DictReader(x))
+
+
+    def load(self, url, path, headers, data, source_format, target_format):
         import fnmatch
         f_list = self.get_url_list(url, headers)
         get_list = fnmatch.filter([y for y in f_list['resource']], path)
-        lists = []
-        for file in get_list:
-            handler = dask.delayed(self.get_url)(url, file, headers, data)
-            lst = dask.delayed(handler.iter_lines())
-            lists.append(lst)
-        return lists
-
-    def read_csv(self, url, path, headers, data):
-        import csv
-        dels = self.read_text(url, path, headers, data)
-        new_dels = []
-        for x in dels:
-            new_dels.append(delayed(list(csv.DictReader(x.compute()))))
-        return new_dels
-
-    def load(self, url, path, headers, data, source_format, target_format):
 
         if source_format == 'rawtxt':
-            self.output = self.read_text(url, path, headers)
+            result = db.from_sequence(get_list).map(self.get_url,url=url,headers=headers,data=data).flatten()
         else:
-            self.output = self.read_csv(url, path, headers)
+            result = db.from_sequence(get_list).map(self.get_url,url=url,headers=headers,data=data).map(self.turn_to_csv).flatten()
 
         if target_format == "frame":
-            result = dd.from_delayed(self.output)
-        else:
-            result = db.from_delayed(self.output)
-        return self.output
+            result = dd.from_bag(result)
+        return result
 
     def write(self, filename):
         return False
